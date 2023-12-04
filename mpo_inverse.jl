@@ -6,22 +6,22 @@ include("heat_equation.jl")
 
 function get_inverse(mpo, sites, cutoff, max_sweeps)
 
-    """
-    This function finds the inverse MPO of the mpo input
     
-    We are essentially solving M v = N_tilde where M and N_tilde are tensor networks and v is the solution to our problem for a given pair of sites and we optimize sweeping left and right the
-    trial solution until it reaches the maximum number of sweeps
+    # This function finds the inverse MPO of the mpo input
+    
+    # We are essentially solving M v = N_tilde where M and N_tilde are tensor networks and v is the solution to our problem for a given pair of sites and we optimize sweeping left and right the
+    # trial solution until it reaches the maximum number of sweeps
 
-    SVDs below are affected by the cutoff input
+    # SVDs below are affected by the cutoff input
 
-    What the function essentially does is SVD on M to get M = USV and then v is given by v = V^-1 S^-1 U^-1 N_tilde but we know U^-1 and V^-1 because U and V are unitary
-    hence U^-1, V^-1 = U^\dagger, V^\dagger
+    # What the function essentially does is SVD on M to get M = USV and then v is given by v = V^-1 S^-1 U^-1 N_tilde but we know U^-1 and V^-1 because U and V are unitary
+    # hence U^-1, V^-1 = U^\dagger, V^\dagger
 
-    We initialize arrays left_right_parts_M, left_right_parts_N_tilde to help us compute M and N_tilde and we update them during the optimization
-    """
-
+    # We initialize arrays left_right_parts_M, left_right_parts_N_tilde to help us compute M and N_tilde and we update them during the optimization
+    
     N = length(sites)
     trial = MPO(sites, "Id")
+    ITensors.orthogonalize!(trial, 1)
 
     # Initialize left_right_parts_M 
     left_right_parts_M = []
@@ -62,13 +62,13 @@ function get_inverse(mpo, sites, cutoff, max_sweeps)
             # Do SVD on M
             U, S, V = ITensors.svd(M, bot..., cutoff = cutoff)
 
-            # Get v named here res
+            # Get v named here v
             S_inv = ITensor(diagm(diag(Array(S, inds(S))).^(-1)), inds(S))
-            res = dag(V)*S_inv*dag(U)*N_tilde
-            res = setprime(res, 1; :plev => 2)
+            v = dag(V)*S_inv*dag(U)*N_tilde
+            v = setprime(v, 1; :plev => 2)
 
-            # SVD on v a.k.a. res so as to update the two sites of the trial MPO
-            U, S, V = ITensors.svd(res, commoninds(res, trial[i]), lefttags = "Link,l=$(i)", righttags = "Link,l=$(i)", cutoff = cutoff)
+            # SVD on v so as to update the two sites of the trial MPO
+            U, S, V = ITensors.svd(v, commoninds(v, trial[i]), lefttags = "Link,l=$(i)", righttags = "Link,l=$(i)", cutoff = cutoff)
             trial[i], trial[i+1] = U, S*V
         
             # Update the left_right_parts_M
@@ -103,10 +103,10 @@ function get_inverse(mpo, sites, cutoff, max_sweeps)
             U, S, V = ITensors.svd(M, bot..., cutoff = cutoff)
 
             S_inv = ITensor(diagm(diag(Array(S, inds(S))).^(-1)), inds(S))
-            res = dag(V)*S_inv*dag(U)*N_tilde
-            res = setprime(res, 1; :plev => 2)
+            v = dag(V)*S_inv*dag(U)*N_tilde
+            v = setprime(v, 1; :plev => 2)
 
-            U, S, V = ITensors.svd(res, commoninds(res, trial[i-1]), lefttags = "Link,l=$(i-1)", righttags = "Link,l=$(i-1)", cutoff = cutoff)
+            U, S, V = ITensors.svd(v, commoninds(v, trial[i-1]), lefttags = "Link,l=$(i-1)", righttags = "Link,l=$(i-1)", cutoff = cutoff)
             
             trial[i-1], trial[i] = U*S, V
 
