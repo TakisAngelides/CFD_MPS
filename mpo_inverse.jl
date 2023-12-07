@@ -122,22 +122,3 @@ function get_inverse(mpo, sites, cutoff, max_sweeps)
     return trial
         
 end
-
-
-N = 4
-sites = siteinds("S=1/2", N)
-mpo = get_mpo(sites)
-max_sweeps = 10
-cutoff = 1e-12
-trial = get_inverse(mpo, sites, cutoff, max_sweeps)
-
-let
-    t = trial'*mpo
-    tmp = t[1]
-    for i in 2:length(t)
-        tmp*=t[i]
-    end
-    tmp = Array(tmp, inds(tmp; :plev => 2)..., inds(tmp; :plev => 0)...)
-    tmp = reshape(tmp, (2^N, 2^N))
-    println(isapprox(tmp, I))
-end

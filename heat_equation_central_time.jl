@@ -1,16 +1,8 @@
 using ITensors
 using Plots
+include("mpo_inverse.jl")
 
-# Constants
-N = 6
-dx = 1/(2^N-1)
-dt = (1e-3)*2*2*2
-# println(dx, " ", dt)
-A = dt/(pi^2*dx^2)
-B = 1-(2*dt)/(pi^2*dx^2)
-n_steps = 250
-
-function get_mpo(sites)
+function get_mpo(sites, A, B)
 
     # Define links indices and initialize MPO of time evolution
     links = [Index(3, "Link,l=$n") for n in 1:N-1]
@@ -195,19 +187,36 @@ function plot_results(mps_list)
     plot()
     x = 0:dx:1
     for (t, mps) in enumerate(mps_list)
-        if (t-1)%(div(n_steps,10))==0
+        if (t-1) % (div(n_steps, 10)) == 0
             plot!(x, mps_to_list(mps), label = "MPS: t = $(round((t-1)*dt, digits = 1))")
             scatter!(x, (1/pi^2)*exp(-(t-1)*dt)*sin.(pi*x), label = "Theory: t = $(round((t-1)*dt, digits = 1))")
         end
     end
-    savefig("evolution.png")
+    savefig("evolution_new.png")
 end
+
+# Constants
+N = 6
+dx = 1/(2^N-1)
+dt = (1e-3)*2*2*2
+# println(dx, " ", dt)
+a = dt/(2*pi^2*dx^2)
+b = 1-(dt/(pi^2*dx^2))
+c = -dt/(2*pi^2*dx^2)
+d = 1+(dt/(pi^2*dx^2))
+n_steps = 250
+max_sweeps = 20
+cutoff = 1e-12
 
 # Initialize the site indices
 sites = siteinds("S=1/2", N)
 
 # Get the time evolution MPO
-mpo = get_mpo(sites)
+mpo_r = get_mpo(sites, a, b)
+mpo_l = get_mpo(sites, c, d)
+mpo_l_inv = get_inverse(mpo_l, sites, cutoff, max_sweeps)
+# println(tr(apply(mpo_l_inv, mpo_l) - MPO(sites,"Id")))
+mpo = apply(mpo_l_inv, mpo_r)
 
 # Get the projector MPO to take care of boundary conditions
 proj_mpo = get_boundary_conditions_MPO(sites)
