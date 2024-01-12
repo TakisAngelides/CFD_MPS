@@ -2,9 +2,37 @@ using ITensors
 using KrylovKit
 using LinearAlgebra
 import ITensors.svd as ITensors_SVD
-include("heat_equation.jl")
 
-function get_inverse(mpo, sites, cutoff, max_sweeps)
+function get_cost_fn_part_one(mpo, trial)
+
+    N = length(mpo)
+    res = prime(trial[1]; :tags => "Site")*mpo[1]*prime(dag(mpo[1]); :tags => "Link")*dag(trial[1]')
+    for i in 2:N
+        res *= prime(trial[i]; :tags => "Site")*mpo[i]*prime(dag(mpo[i]); :tags => "Link")*dag(trial[i]')
+    end
+    return res[1]
+
+end
+
+function get_cost_fn_part_two(mpo, trial)
+
+    N = length(mpo)
+    res = setprime(mpo[1]', 0; :plev => 2)*setprime(dag(trial[1]), 1; :tags => "Link")
+    for i in 2:N
+        res *= setprime(mpo[i]', 0; :plev => 2)*setprime(dag(trial[i]), 1; :tags => "Link")
+    end
+    return res[1]
+
+end
+
+function get_cost_fn(mpo, trial)
+
+    N = length(mpo)
+    return get_cost_fn_part_one(mpo, trial) - 2*get_cost_fn_part_two(mpo, trial) + 2^N
+
+end
+
+function get_inverse(mpo, sites, cutoff, max_sweeps, tol)
 
     
     # This function finds the inverse MPO of the mpo input
@@ -18,6 +46,8 @@ function get_inverse(mpo, sites, cutoff, max_sweeps)
     # hence U^-1, V^-1 = U^\dagger, V^\dagger
 
     # We initialize arrays left_right_parts_M, left_right_parts_N_tilde to help us compute M and N_tilde and we update them during the optimization
+
+    # Tol is for the stopping condition on the cost function fractional change
     
     N = length(sites)
     trial = MPO(sites, "Id")
@@ -36,6 +66,8 @@ function get_inverse(mpo, sites, cutoff, max_sweeps)
         push!(left_right_parts_N_tilde, setprime(mpo[i]', 0; :plev => 2)*setprime(dag(trial[i]), 1; :tags => "Link"))
     end
 
+    E = 0.0
+    
     # Start optimization
     for sw in 1:max_sweeps
 
@@ -117,6 +149,17 @@ function get_inverse(mpo, sites, cutoff, max_sweeps)
             for j in [i, i-1]                
                 left_right_parts_N_tilde[j] = setprime(mpo[j]', 0; :plev => 2)*setprime(dag(trial[j]), 1; :tags => "Link")
             end
+        end
+
+        # Set the current energy variable E_curr to the final decreased energy E after a full sweep
+        E = get_cost_fn(mpo, trial)
+        
+        # Check for stopping conditions
+        if (E < tol)
+            println("Energy accuracy reached for inverse MPO.")
+            break
+        elseif (max_sweeps == sw)
+            println("Maximum sweeps reached before reaching desired energy accuracy for inverse MPO.")
         end
     end
     return trial
